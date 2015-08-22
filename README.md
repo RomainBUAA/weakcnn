@@ -4,7 +4,7 @@ This is a matlab implementation of weakly supervised ConvNet, which has its orig
 
 ##How to implement the code
 1.I used matconvnet in this project, which means you should have installed Matconvnet in your computer.
-![Matconvnet](http://www.vlfeat.org/matconvnet/) Thanks to A. Vedaldi and K. Lenc for providing such a good tool.
+Here is the link (http://www.vlfeat.org/matconvnet/) Thanks to A. Vedaldi and K. Lenc for providing such a good tool.
 You need to download and install Matconvnet.
 
 2.Put the function file in folders 'example' and 'matlab' to corresponding location.(PS: you should have the same two folders
