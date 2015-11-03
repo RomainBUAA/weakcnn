@@ -19,3 +19,8 @@ You need to download and install Matconvnet.
 I didn't modify the output message carefully cause I don't have enough time. This situatio will be improved in the latter version.
 5.We only used a small set from PASCAL VOC 2012 which is not enough for complete training process.
 Feel free to contact me via zhouhy at lamda.nju.edu.cn.
+
+#Version 0.2
+This version now supports Gpu acceleration!
+I modified the loss function and some other details, e.t. random sample. However, I didn't try a multi-scale model.
+I believe this code could achieve nearly the same accuracy with the original one which is written using torch7.
