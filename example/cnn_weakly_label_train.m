@@ -1,4 +1,4 @@
-function [net, info] = cnn_weakly_label_train(net, imdb, getBatch, varargin)
+function [net, info] = cnn_weakly_label_train(net, imdb ,getBatch, opts, varargin)
 % CNN_TRAIN   Demonstrates training a CNN
 %    CNN_TRAIN() is an example learner implementing stochastic
 %    gradient descent with momentum to train a CNN. It can be used
@@ -19,15 +19,15 @@ function [net, info] = cnn_weakly_label_train(net, imdb, getBatch, varargin)
 % This file is part of the VLFeat library and is made available under
 % the terms of the BSD license (see the COPYING file).
 
-opts.batchSize = 10 ;
+opts.batchSize = 16 ;
 opts.numSubBatches = 1 ;
 opts.train = [] ;
 opts.val = [] ;
-opts.numEpochs = 20 ;
-opts.gpus = [] ; % which GPU devices to use (none, one, or more)
+opts.numEpochs = 200 ;
+opts.gpus = 1 ; % which GPU devices to use (none, one, or more)
 opts.learningRate = 0.001 ;
-opts.continue = false ;
-opts.expDir = fullfile('data','exp') ;
+opts.continue = true ;
+opts.expDir = fullfile('data','exp_101') ;
 opts.conserveMemory = false ;
 opts.backPropDepth = +inf ;
 opts.sync = false ;
@@ -39,11 +39,63 @@ opts.errorFunction = 'multiclass' ;
 opts.errorLabels = {} ;
 opts.plotDiagnostics = false ;
 opts.memoryMapFile = fullfile(tempdir, 'matconvnet.bin') ;
-opts = vl_argparse(opts, varargin) ;
+% opts = vl_argparse(opts, varargin) ;
+
+%----------------------------------------------------------------------------------
+% read data in limited space
+di=dir('/home/zhouhy/VOCdevkit/VOC2012/JPEGImages/*.jpg');
+train_set=textread('/home/zhouhy/VOCdevkit/VOC2012/2012_train.txt','%s');
+val_set=textread('/home/zhouhy/VOCdevkit/VOC2012/2012_val.txt','%s');
+bS=opts.batchSize;
+trainSize=size(train_set);
+valSize=size(val_set);
+
+dbSize=trainSize(1)+valSize(1);
+%imdb.images.data=zeros(500,500,3,dbSize);
+tx=dir('/home/zhouhy/VOCdevkit/VOC2012/labels/*.txt');
+txSize=size(tx);
+% imdb.images.labels=zeros(20,dbSize);
+% imdb.images.set=zeros(1,dbSize);
+imdb.images.data_mean={};
+
+for k=1:txSize
+    if k<=trainSize(1)
+%         n=char(train_set(k));
+%         imdb.images.data(:,:,:,k)=imresize(imread(n),[500 500]);
+%         txtname=strcat('/home/zhouhy/VOCdevkit/VOC2012/labels/',n(43:53),'.txt');
+%         [classes,x,y,width,height]=textread(txtname,'%d %f %f %f %f');
+%         numClasses=size(classes);
+%         for j=1:numClasses(1)
+%             if classes(j)==20
+%                 printf('cao');
+%             end
+%             imdb.images.labels(classes(j)+1,k)=1;
+%         end
+        imdb.images.set(k)=1;
+    else
+%         n=char(val_set(k-5717));
+%         imdb.images.data(:,:,:,k)=imresize(imread(n),[500 500]);
+%         txtname=strcat('/home/zhouhy/VOCdevkit/VOC2012/labels/',n(43:53),'.txt');
+%         [classes,x,y,width,height]=textread(txtname,'%d %f %f %f %f');
+%         numClasses=size(classes);
+%         for j=1:numClasses(1)
+%             if classes(j)==20
+%                 printf('cao');
+%             end
+%             imdb.images.labels(classes(j)+1,k)=1;
+%         end
+        imdb.images.set(k)=3;
+    end
+    
+    
+end
+
+% imdb.images.data_mean=mean(imdb.images.data,4);
+%----------------------------------------------------------------------------------------
 
 if ~exist(opts.expDir, 'dir'), mkdir(opts.expDir) ; end
 if isempty(opts.train), opts.train = find(imdb.images.set==1) ; end
-if isempty(opts.val), opts.val = find(imdb.images.set==2) ; end
+if isempty(opts.val), opts.val = find(imdb.images.set==3) ; end
 if isnan(opts.train), opts.train = [] ; end
 
 % -------------------------------------------------------------------------
@@ -67,16 +119,16 @@ if ~evaluateMode
       end
     end
     % Legacy code: will be removed
-    if isfield(net.layers{i}, 'filters')
-      net.layers{i}.momentum{1} = zeros(size(net.layers{i}.filters), 'single') ;
-      net.layers{i}.momentum{2} = zeros(size(net.layers{i}.biases), 'single') ;
-      if ~isfield(net.layers{i}, 'learningRate')
-        net.layers{i}.learningRate = ones(1, 2, 'single') ;
-      end
-      if ~isfield(net.layers{i}, 'weightDecay')
-        net.layers{i}.weightDecay = single([1 0]) ;
-      end
-    end
+%     if isfield(net.layers{i}, 'filters')
+%         net.layers{i}.momentum{1} = zeros(size(net.layers{i}.filters), 'single') ;
+%         net.layers{i}.momentum{2} = zeros(size(net.layers{i}.biases), 'single') ;
+%         if ~isfield(net.layers{i}, 'learningRate')
+%             net.layers{i}.learningRate = ones(1, 2, 'single') ;
+%         end
+%         if ~isfield(net.layers{i}, 'weightDecay')
+%             net.layers{i}.weightDecay = single([1 0]) ;
+%         end
+%     end
   end
 end
 
@@ -133,14 +185,19 @@ for epoch=1:opts.numEpochs
 
   % train one epoch and validate
   train = opts.train(randperm(numel(opts.train))) ; % shuffle
-  val = opts.val ;
+  val = opts.val;
   if numGpus <= 1
-    [net,stats.train] = process_epoch(opts, getBatch, epoch, train, learningRate, imdb, net) ;
-    [~,stats.val] = process_epoch(opts, getBatch, epoch, val, 0, imdb, net) ;
+      status='train';
+      if mod(epoch,10)==0
+          learningRate=learningRate*0.8;
+      end
+      [net,stats.train] = process_epoch(opts, getBatch, epoch, train, learningRate, imdb, net, train_set, status) ;
+      status='validation';
+      [~,stats.val] = process_epoch(opts, getBatch, epoch, val, 0, imdb, net, val_set, status) ;
   else
     spmd(numGpus)
-      [net_, stats_train_] = process_epoch(opts, getBatch, epoch, train, learningRate, imdb, net) ;
-      [~, stats_val_] = process_epoch(opts, getBatch, epoch, val, 0, imdb, net_) ;
+      [net_, stats_train_] = process_epoch(opts, getBatch, epoch, train, learningRate, imdb, net,train_set) ;
+      [~, stats_val_] = process_epoch(opts, getBatch, epoch, val, 0, imdb, net_, val_set) ;
     end
     net = net_{1} ;
     stats.train = sum([stats_train_{:}],2) ;
@@ -148,7 +205,8 @@ for epoch=1:opts.numEpochs
   end
 
   % save
-  if evaluateMode, sets = {'val'} ; else sets = {'train', 'val'} ; end
+  %if evaluateMode, sets = {'val'} ; else sets = {'train', 'val'} ; end
+  sets={'train'};
   for f = sets
     f = char(f) ;
     n = numel(eval(f)) ;
@@ -194,17 +252,27 @@ function mAP = error_multiclass(opts, labels, res)
 % -------------------------------------------------------------------------
 predictions = gather(res(end-1).x) ;
 [~,predictions] = sort(predictions, 3, 'descend') ;
+if (size(predictions,1)*size(predictions,2)*size(predictions,3)*size(predictions,4))~=(size(labels,1)*size(labels,2))
+    disp 'cao';
+end
 predictions=reshape(predictions,size(labels));
 numRank=sum(labels,1);
 sizeLabel=size(labels);
 numImgs=sizeLabel(2);
 [~,groundtruth]=sort(labels,1,'descend');
-error = ~bsxfun(@eq, predictions, groundtruth) ;
+%error = ~bsxfun(@eq, predictions, groundtruth) ;
 mAP=0;
 for i=1:numImgs
-    mAP=mAP+sum(error(1:numRank(i),i))/numRank(i);    
+    for j=1:numRank(i)
+        for k=1:numRank(i)
+            if predictions(j,i)==groundtruth(k,i)
+                mAP=mAP+1;
+                groundtruth(k,i)=0;
+            end
+        end
+    end
 end
-mAP=mAP/numImgs;
+mAP=mAP/sum(numRank);
 %err(1,1) = sum(sum(sum(mass .* error(:,:,1,:)))) ;
 %err(2,1) = sum(sum(sum(mass .* min(error(:,:,1:5,:),[],3)))) ;
 
@@ -221,7 +289,7 @@ function err = error_none(opts, labels, res)
 err = zeros(0,1) ;
 
 % -------------------------------------------------------------------------
-function  [net_cpu,stats,prof] = process_epoch(opts, getBatch, epoch, subset, learningRate, imdb, net_cpu)
+function  [net_cpu,stats,prof] = process_epoch(opts, getBatch, epoch, subset, learningRate, imdb, net_cpu, Set, status)
 % -------------------------------------------------------------------------
 
 % move CNN to GPU as needed
@@ -235,7 +303,7 @@ end
 
 % validation mode if learning rate is zero
 training = learningRate > 0 ;
-if training, mode = 'training' ; else, mode = 'validation' ; end
+if training, mode = 'training' ; else mode = 'validation' ; end
 if nargout > 2, mpiprofile on ; end
 
 numGpus = numel(opts.gpus) ;
@@ -247,10 +315,15 @@ end
 res = [] ;
 mmap = [] ;
 stats = [] ;
-
+totalBatch=0;
+sz=size(Set,1);
+top5=0;
 for t=1:opts.batchSize:numel(subset)
   fprintf('%s: epoch %02d: batch %3d/%3d: ', mode, epoch, ...
           fix(t/opts.batchSize)+1, ceil(numel(subset)/opts.batchSize)) ;
+      if strcmp(mode,'validation')
+          disp 'cao';
+      end
   batchSize = min(opts.batchSize, numel(subset) - t + 1) ;
   batchTime = tic ;
   numDone = 0 ;
@@ -260,7 +333,10 @@ for t=1:opts.batchSize:numel(subset)
     batchStart = t + (labindex-1) + (s-1) * numlabs ;
     batchEnd = min(t+opts.batchSize-1, numel(subset)) ;
     batch = subset(batchStart : opts.numSubBatches * numlabs : batchEnd) ;
-    [im, labels] = getBatch(imdb, batch) ;
+    totalBatch=totalBatch+size(batch,2);
+    %randomized rescale
+    scale=rand()*0.7+0.7;
+    [im, labels]=getBatch(Set, batch, status, scale) ;
 
     if opts.prefetch
       if s==opts.numSubBatches
@@ -270,7 +346,7 @@ for t=1:opts.batchSize:numel(subset)
         batchStart = batchStart + numlabs ;
       end
       nextBatch = subset(batchStart : opts.numSubBatches * numlabs : batchEnd) ;
-      getBatch(imdb, nextBatch) ;
+      getBatch(Set, nextBatch, status) ;
     end
 
     if numGpus >= 1
@@ -279,7 +355,7 @@ for t=1:opts.batchSize:numel(subset)
 
     % evaluate CNN
     net.layers{end}.class = labels ;
-    if training, dzdy = one; else, dzdy = [] ; end
+    if training, dzdy = one; else dzdy = [] ; end
     res = vl_simplenn(net, im, dzdy, res, ...
                       'accumulate', s ~= 1, ...
                       'disableDropout', ~training, ...
@@ -292,7 +368,7 @@ for t=1:opts.batchSize:numel(subset)
 %     error = sum([error, [...
 %       sum(double(gather(res(end).x))) ;
 %       reshape(opts.errorFunction(opts, labels, res),[],1) ; ]],2) ;
-    error=opts.errorFunction(opts, labels, res);
+    error=opts.errorFunction(opts, labels, res); %output error information
     numDone = numDone + numel(batch) ;
   end
 
@@ -322,7 +398,9 @@ for t=1:opts.batchSize:numel(subset)
 %     fprintf(' %s:%.3g', opts.errorLabels{i}, stats(i+2)/n) ;
 %   end
   %mAP
-  fprintf(' mAP:%.2f',error);
+  error=(error*size(batch,2)+top5)/totalBatch;
+  top5=top5+error*size(batch,2);
+  fprintf(' mAP:%.5f',error);
   fprintf(' [%d/%d]', numDone, batchSize);
   fprintf('\n') ;
 
@@ -361,27 +439,27 @@ for l=numel(net.layers):-1:1
       res(l).dzdw{j} = res(l).dzdw{j} + tmp ;
     end
 
-    if isfield(net.layers{l}, 'weights')
+    if isfield(net.layers{l}, 'weights') && l>=18
       net.layers{l}.momentum{j} = ...
         opts.momentum * net.layers{l}.momentum{j} ...
         - thisDecay * net.layers{l}.weights{j} ...
         - (1 / batchSize) * res(l).dzdw{j} ;
       net.layers{l}.weights{j} = net.layers{l}.weights{j} + thisLR * net.layers{l}.momentum{j} ;
-    else
-      % Legacy code: to be removed
-      if j == 1
-        net.layers{l}.momentum{j} = ...
-          opts.momentum * net.layers{l}.momentum{j} ...
-          - thisDecay * net.layers{l}.filters ...
-          - (1 / batchSize) * res(l).dzdw{j} ;
-        net.layers{l}.filters = net.layers{l}.filters + thisLR * net.layers{l}.momentum{j} ;
-      else
-        net.layers{l}.momentum{j} = ...
-          opts.momentum * net.layers{l}.momentum{j} ...
-          - thisDecay * net.layers{l}.biases ...
-          - (1 / batchSize) * res(l).dzdw{j} ;
-        net.layers{l}.biases = net.layers{l}.biases + thisLR * net.layers{l}.momentum{j} ;
-      end
+%     else
+%       % Legacy code: to be removed
+%       if j == 1
+%         net.layers{l}.momentum{j} = ...
+%           opts.momentum * net.layers{l}.momentum{j} ...
+%           - thisDecay * net.layers{l}.filters ...
+%           - (1 / batchSize) * res(l).dzdw{j} ;
+%         net.layers{l}.filters = net.layers{l}.filters + thisLR * net.layers{l}.momentum{j} ;
+%       else
+%         net.layers{l}.momentum{j} = ...
+%           opts.momentum * net.layers{l}.momentum{j} ...
+%           - thisDecay * net.layers{l}.biases ...
+%           - (1 / batchSize) * res(l).dzdw{j} ;
+%         net.layers{l}.biases = net.layers{l}.biases + thisLR * net.layers{l}.momentum{j} ;
+%       end
     end
   end
 end
