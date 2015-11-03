@@ -20,14 +20,15 @@ function Y = vl_nnsoftmaxforweaklabel(X,c,dzdy)
 % the terms of the BSD license (see the COPYING file).
 
 %X = X + 1e-6 ;
-
+%Y=X;
+%%
 %indicating absence -1 presence =+1
 y=[-1,1];
 y=single(y);
 szLabel=size(c);
 classNum=szLabel(1);
 trainSize=szLabel(2);
-Y=0;
+Y=gpuArray(single(0));
 if nargin<=2
     for i=1:trainSize
         for j=1:classNum
@@ -37,21 +38,24 @@ if nargin<=2
                 Y=Y+log(1+exp(-y(1)*X(1,1,j,i)));
             end
         end
-        Y=0;
+        %Y=0;
     end
 else
-    Y=zeros(size(X));
+    Y=gpuArray(single(zeros(size(X))));
+    %y=single(y);
     for i=1:trainSize
         for j=1:classNum
             if c(j,i)==1
-                Y(1,1,j,i)=(-y(2)*exp(-y(2)*X(1,1,j,i)))/(1+exp(-y(2)*X(1,1,j,i)));
+                Y(1,1,j,i)=((-y(2)*exp(-y(2)*X(1,1,j,i)))/(1+exp(-y(2)*X(1,1,j,i))));
+                %((-y(2)*exp(-y(2)*X(1,1,j,i)))/(1+exp(-y(2)*X(1,1,j,i))));
             elseif c(j,i)==0
-                Y(1,1,j,i)=(-y(1)*exp(-y(1)*X(1,1,j,i)))/(1+exp(-y(1)*X(1,1,j,i)));
+                Y(1,1,j,i)=((-y(1)*exp(-y(1)*X(1,1,j,i)))/(1+exp(-y(1)*X(1,1,j,i))));
+                %((-y(1)*exp(-y(1)*X(1,1,j,i)))/(1+exp(-y(1)*X(1,1,j,i))));
             end
         end
     end
 end
-
+%%
 
 % X=sum(X,1);
 % X=sum(X,2);
